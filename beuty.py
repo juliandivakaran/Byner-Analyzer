@@ -27,10 +27,10 @@ def generate():
         db = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME)
         db2 = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME2)
 
-        last_entry = db2.fetch_data_by_query({"last_index":{"$exists":True}})
+        last_entry = db2.fetch_data_by_query({"last_index": {"$exists": True}})
         last_index = last_entry[0]["last_index"] if last_entry else 0
 
-        index_counter = last_index+1
+        index_counter = last_index + 1
 
         # Configure Selenium driver
         driver_path = r"C:\www\geckodriver.exe"
@@ -43,29 +43,31 @@ def generate():
         url = "https://binarybot.live/ldp/"
         driver.get(url)
 
-        # Set the scraping time limit (15 minutes)
+        # Set the scraping time limit (60 minutes)
         start_time = datetime.datetime.now()
         end_time = start_time + datetime.timedelta(minutes=60)
-        
-        
+
+        last_timestamp = None  # Initialize last_timestamp
+        last_number = None
 
         while datetime.datetime.now() < end_time:
             try:
                 digits_div = driver.find_element(By.ID, "digits")
                 spans = digits_div.find_elements(By.TAG_NAME, "span")
-                
+
                 # Initialize the scraped data dictionary
                 scraped_data = {
                     "timestamp": datetime.datetime.now(),
                     "all_numbers": [],
                     "red_numbers": [],
                     "blue_numbers": [],
-                    "indices" : [],
-                    "red_indices" : [],
-                    "blue_indices" : []
+                    "indices": [],
+                    "red_indices": [],
+                    "blue_indices": [],
+                    "time_intervals": [],  # Store time intervals between consecutive events
+                    "trends": [],  # Store trends like "increasing" or "decreasing"
+                    "market_indicators": []  # Placeholder for market indicators (to be fetched)
                 }
-                last_index = None
-                last_number =None
 
                 for span in spans:
                     number = span.text.strip()
@@ -82,7 +84,18 @@ def generate():
 
                         # Track all indices
                         scraped_data["indices"].append(f"{index_counter}:{number}")
-                        last_index = index_counter
+
+                        # Time Interval Calculation
+                        if last_timestamp:  # Calculate the interval only if last_timestamp is set
+                            time_interval = (scraped_data["timestamp"] - last_timestamp).total_seconds()
+                            scraped_data["time_intervals"].append(time_interval)
+                        
+                        # Trend Calculation: Check if the number is increasing or decreasing
+                        if last_number is not None:
+                            trend = "increasing" if int(number) > int(last_number) else "decreasing"
+                            scraped_data["trends"].append(trend)
+
+                        last_timestamp = scraped_data["timestamp"]
                         last_number = number
                         index_counter += 1
 
@@ -97,11 +110,12 @@ def generate():
                 yield f"indices: {', '.join(scraped_data['indices'])}\n\n"
                 yield f"Red Indices: {', '.join(scraped_data['red_indices'])}\n\n"
                 yield f"Blue Indices: {', '.join(scraped_data['blue_indices'])}\n\n"
+                yield f"Time Intervals: {', '.join(map(str, scraped_data['time_intervals']))}\n\n"
+                yield f"Trends: {', '.join(scraped_data['trends'])}\n\n"
+                yield f"Market Indicators: {', '.join(scraped_data['market_indicators'])}\n\n"
 
                 # Sleep before the next scrape
                 time.sleep(12)
-
-                
 
             except Exception as e:
                 yield f"Error during scraping: {e}\n"
@@ -109,20 +123,19 @@ def generate():
 
         driver.quit()
         db.close_connection()
+        
+        # Save last index and number to the second collection
         try:
-             if last_number and last_index:
-                 last = {
-                     "last_index": last_index,
-                     "last_number": last_number
-                 }
-                 #db2 = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME2)
-                 db2.collection.delete_many({"last_index": {"$exists":True}})
-                 db2.insert_data(last)
+            if last_number and last_index:
+                last = {
+                    "last_index": last_index,
+                    "last_number": last_number
+                }
+                db2.collection.delete_many({"last_index": {"$exists": True}})
+                db2.insert_data(last)
 
         except Exception as e:
-             yield f"Error saving last index and number: {e}\n"
-        
-
+            yield f"Error saving last index and number: {e}\n"
 
     except Exception as e:
         yield f"Error occurred during initialization: {e}\n"
