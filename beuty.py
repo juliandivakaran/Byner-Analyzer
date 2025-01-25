@@ -45,7 +45,7 @@ def generate():
 
         # Set the scraping time limit (15 minutes)
         start_time = datetime.datetime.now()
-        end_time = start_time + datetime.timedelta(minutes=0.21)
+        end_time = start_time + datetime.timedelta(minutes=60)
         
         
 
@@ -99,7 +99,7 @@ def generate():
                 yield f"Blue Indices: {', '.join(scraped_data['blue_indices'])}\n\n"
 
                 # Sleep before the next scrape
-                time.sleep(3)
+                time.sleep(12)
 
                 
 
