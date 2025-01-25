@@ -19,11 +19,18 @@ MONGO_URI = f"mongodb+srv://{encoded_username}:{encoded_password}@byner.vxp0o.mo
 # MongoDB configuration
 DB_NAME = "testdb"
 COLLECTION_NAME = "sequence_numbers"
+COLLECTION_NAME2 = "last_index"
 
 def generate():
     try:
         # Initialize MongoDB connection
         db = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME)
+        db2 = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME2)
+
+        last_entry = db2.fetch_data_by_query({"last_index":{"$exists":True}})
+        last_index = last_entry[0]["last_index"] if last_entry else 0
+
+        index_counter = last_index+1
 
         # Configure Selenium driver
         driver_path = r"C:\www\geckodriver.exe"
@@ -38,9 +45,9 @@ def generate():
 
         # Set the scraping time limit (15 minutes)
         start_time = datetime.datetime.now()
-        end_time = start_time + datetime.timedelta(minutes=30)
+        end_time = start_time + datetime.timedelta(minutes=0.21)
         
-        index_counter = 1
+        
 
         while datetime.datetime.now() < end_time:
             try:
@@ -57,6 +64,8 @@ def generate():
                     "red_indices" : [],
                     "blue_indices" : []
                 }
+                last_index = None
+                last_number =None
 
                 for span in spans:
                     number = span.text.strip()
@@ -73,6 +82,8 @@ def generate():
 
                         # Track all indices
                         scraped_data["indices"].append(f"{index_counter}:{number}")
+                        last_index = index_counter
+                        last_number = number
                         index_counter += 1
 
                 # Save the data to MongoDB
@@ -90,12 +101,28 @@ def generate():
                 # Sleep before the next scrape
                 time.sleep(3)
 
+                
+
             except Exception as e:
                 yield f"Error during scraping: {e}\n"
                 break
 
         driver.quit()
         db.close_connection()
+        try:
+             if last_number and last_index:
+                 last = {
+                     "last_index": last_index,
+                     "last_number": last_number
+                 }
+                 #db2 = MongoDB(MONGO_URI, DB_NAME, COLLECTION_NAME2)
+                 db2.collection.delete_many({"last_index": {"$exists":True}})
+                 db2.insert_data(last)
+
+        except Exception as e:
+             yield f"Error saving last index and number: {e}\n"
+        
+
 
     except Exception as e:
         yield f"Error occurred during initialization: {e}\n"
